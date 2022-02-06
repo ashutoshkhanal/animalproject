@@ -1,0 +1,8 @@
+0 Chicken
+1 Cow
+2 Dog
+3 Elephant
+4 Horse
+5 Monkey
+6 Squirrel
+7 Cat
