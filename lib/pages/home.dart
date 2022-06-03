@@ -1,137 +1,165 @@
-import 'dart:io';
-
-import 'package:animalproject/pages/description.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
+import 'package:camera/camera.dart';
 import 'package:tflite/tflite.dart';
-import 'package:flutter_tts/flutter_tts.dart';
 
-class HomePage extends StatefulWidget {
+List<CameraDescription> cameras;
+
+class MyHomePage extends StatefulWidget {
+  MyHomePage({Key key, this.title}) : super(key: key);
+  final String title;
   @override
-  _HomePageState createState() => _HomePageState();
+  _MyHomePageState createState() => _MyHomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
-  final FlutterTts tts = FlutterTts();
-  // final TextEditingController controller =
-  //     TextEditingController(text: 'Hello world');
-
-  var isLoading = false;
-  File fileImage;
-  final listOutputs = [];
-
+class _MyHomePageState extends State<MyHomePage> {
+  CameraImage img;
+  CameraController controller;
+  bool isBusy = false;
+  String result = "";
   @override
   void initState() {
-    isLoading = true;
-    loadModel().then((value) {
-      setState(() => isLoading = false);
-    });
     super.initState();
+    loadModel();
+  }
+
+  iniCamera() {
+    controller = CameraController(cameras[0], ResolutionPreset.medium);
+    controller.initialize().then((_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        controller.startImageStream((image) => {
+              if (!isBusy) {isBusy = true, img = image, startImageLabeling()}
+            });
+      });
+    });
+  }
+
+  @override
+  Future<void> dispose() async {
+    controller?.dispose();
+    await Tflite.close();
+    super.dispose();
+  }
+
+  loadModel() async {
+    await Tflite.loadModel(
+        model: "assets/model_unquant.tflite",
+        labels: "assets/labels.txt",
+        numThreads: 1, // defaults to 1
+        isAsset:
+            true, // defaults to true, set to false to load resources outside assets
+        useGpuDelegate:
+            false // defaults to false, set to true to use GPU delegate
+        );
+  }
+
+  startImageLabeling() async {
+    if (img != null) {
+      {
+        var recognitions = await Tflite.runModelOnFrame(
+            bytesList: img.planes.map((plane) {
+              return plane.bytes;
+            }).toList(),
+            // required
+            imageHeight: img.height,
+            imageWidth: img.width,
+            imageMean: 127.5,
+            // defaults to 127.5
+            imageStd: 127.5,
+            // defaults to 127.5
+            rotation: 90,
+            // defaults to 90, Android only
+            numResults: 2,
+            // defaults to 5
+            threshold: 0.1,
+            // defaults to 0.1
+            asynch: true // defaults to true
+            );
+        result = "";
+        recognitions.forEach((re) {
+          result += re['label'] +
+              ": " +
+              (re['confidence'] as double).toStringAsFixed(2) +
+              "\n";
+        });
+        setState(() {
+          result;
+        });
+        isBusy = false;
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: isLoading
-          ? Center(
-              child: CircularProgressIndicator(),
-            )
-          : Container(
-              width: double.infinity,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  fileImage == null ? Container() : Image.file(fileImage),
-                  Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      listOutputs.length != 0
-                          ? ElevatedButton(
-                              onPressed: () {
-                                // tts.speak(controller.text);
-                                tts.speak(listOutputs[0]['label'].substring(2));
-                              },
-                              child: Text('Speak'),
-                              style: ButtonStyle(
-                                backgroundColor:
-                                    MaterialStateProperty.all<Color>(
-                                        Colors.orange),
-                              ),
-                            )
-                          : Container()
-                    ],
-                  ),
-                  SizedBox(height: 16),
-                  listOutputs.length != 0
-                      ? TextButton(
-                          onPressed: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => Description(
-                                  value: listOutputs[0]['label']
-                                      .substring(2)
-                                      .toString()),
-                              //
-                            ),
-                          ),
-                          child: Text(
-                            "${listOutputs[0]['label'].substring(2)} : ${(listOutputs[0]['confidence'] * 100).toStringAsFixed(1)} %",
-                            style: TextStyle(
-                              fontSize: 20,
-                              color: Colors.black,
-                              background: Paint()..color = Colors.white,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        )
-                      : Text('Upload your image'),
-                ],
-              ),
+    return MaterialApp(
+      home: SafeArea(
+        child: Scaffold(
+          body: Container(
+            decoration: BoxDecoration(
+              image: DecorationImage(
+                  image: AssetImage('assets/img2.jpg'), fit: BoxFit.fill),
             ),
-      floatingActionButton: FloatingActionButton(
-        child: Icon(Icons.image),
-        tooltip: 'Take Picture From Gallery',
-        onPressed: () => pickImage(ImageSource.gallery),
-        backgroundColor: Colors.orange,
+            child: Column(
+              children: [
+                Stack(
+                  children: [
+                    Center(
+                      child: Container(
+                          margin: EdgeInsets.only(top: 100),
+                          height: 220,
+                          width: 320,
+                          child: Image.asset('assets/lcd2.jpg')),
+                    ),
+                    Center(
+                      child: FlatButton(
+                        child: Container(
+                          margin: EdgeInsets.only(top: 118),
+                          height: 177,
+                          width: 310,
+                          child: img == null
+                              ? Container(
+                                  width: 140,
+                                  height: 150,
+                                  child: Icon(
+                                    Icons.videocam,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : AspectRatio(
+                                  aspectRatio: controller.value.aspectRatio,
+                                  child: CameraPreview(controller),
+                                ),
+                        ),
+                        onPressed: () {
+                          iniCamera();
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+                Center(
+                  child: Container(
+                    margin: EdgeInsets.only(top: 50),
+                    child: SingleChildScrollView(
+                        child: Text(
+                      '$result',
+                      style: TextStyle(
+                          fontSize: 30,
+                          color: Colors.black,
+                          fontFamily: 'finger_paint'),
+                      textAlign: TextAlign.center,
+                    )),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
-  }
-
-  Future loadModel() async {
-    await Tflite.loadModel(
-      model: 'assets/model_unquant.tflite',
-      labels: 'assets/labels.txt',
-    );
-  }
-
-  void pickImage(ImageSource imageSource) async {
-    var image = await ImagePicker().getImage(source: imageSource);
-    if (image == null) {
-      return null;
-    }
-    setState(() {
-      isLoading = true;
-      fileImage = File(image.path);
-    });
-    processImage(fileImage);
-  }
-
-  void processImage(File image) async {
-    var output = await Tflite.runModelOnImage(
-      path: image.path,
-      numResults: 2,
-      threshold: 0.5,
-      imageMean: 127.5,
-      imageStd: 127.5,
-    );
-    print(output);
-    setState(() {
-      isLoading = false;
-      listOutputs.clear();
-      listOutputs.addAll(output);
-      debugPrint('outputs: $listOutputs');
-    });
-    await tts.speak(listOutputs[0]['label'].substring(2));
   }
 }

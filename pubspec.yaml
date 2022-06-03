@@ -30,6 +30,7 @@ dependencies:
   path_provider: 
   assets_audio_player:
   flutter_tts:
+  camera: ^0.8.1+7
    
 
 dev_dependencies:

@@ -77,6 +77,13 @@ class _CameraState extends State<Camera> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: PreferredSize(
+        preferredSize: Size.fromHeight(70),
+        child: AppBar(
+          backgroundColor: Colors.orange,
+          title: const Text('Animal Detection Application'),
+        ),
+      ),
       body:
           // Center(
           //     child: fileImage1 == null
@@ -127,7 +134,7 @@ class _CameraState extends State<Camera> {
                     ),
                   ),
                 )
-              : Text('Upload your image'),
+              : Text('Click Photos'),
         ],
       ),
       floatingActionButton: FloatingActionButton(
